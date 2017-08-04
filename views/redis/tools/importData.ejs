@@ -1,0 +1,39 @@
+<form class="form-horizontal" id="redisImportForm">
+	<div class="control-group">
+		<label class="control-label" for="connectionExportField">Connection</label>
+		<div class="controls">
+			<select name="connection" class="selectpicker" data-style="btn-info">
+				<% var connections = getConnections(); %>
+				<% connections.forEach(function(connection, index) {%>
+				<% if (index == 0) { %>
+				<option value="<%=connection.connection_options.host%>:<%=connection.connection_options.port%>:<%=connection.selected_db%>"><%=connection.connection_options.host%>:<%=connection.connection_options.port%>:<%=connection.selected_db%></option>
+				<% } else { %>
+				<option value="<%=connection.connection_options.host%>:<%=connection.connection_options.port%>:<%=connection.selected_db%>"><%=connection.connection_options.host%>:<%=connection.connection_options.port%>:<%=connection.selected_db%></option>
+				<% }}); %>
+			</select>
+		</div>
+	</div>
+	<div class="control-group" style="margin-top:10px;">
+		<label class="control-label" for="importData">
+				<span class="muted">
+				Data: SET, HSET, LPUSH, RPUSH, SADD, ZADD
+				</span>
+		</label>
+		<div class="controls" style="margin-top:4px;">
+			<textarea name="data" id="importData"></textarea>
+		</div>
+	</div>
+	<div class="control-group">
+		<label class="control-label" for="flushDb">Flush DB</label>
+		<div class="controls">
+			<input type="checkbox" name="clear" value="1" id="flushDb" data-toggle="toggle" checked>
+		</div>
+	</div>
+	<!--
+	<div class="control-group" style="margin-top:12px;margin-bottom:20px;">
+		<div class="controls">
+			<input type="submit" class="btn btn-primary" value="Import">
+		</div>
+	</div>
+	-->
+</form>

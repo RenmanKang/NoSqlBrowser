@@ -1,0 +1,50 @@
+<div style="min-width:600px">
+	<h2><%= __('Server Status') %></h2>
+	<table class="table table-bordered table-striped table-hover">
+		<tr>
+			<td class="span2"><strong><%= __('Hostname') %></strong></td>
+			<td class="span3" id="dbHost"><%= info.host %></td>
+			<td class="span2"><strong><%= __('MongoDB Version') %></strong></td>
+			<td class="span3" id="dbVersion"><%= info.version %></td>
+		</tr>
+		<tr>
+			<td><strong><%= __('Uptime') %></strong></td>
+			<td>
+				<span class="number"><%= info.uptime %></span> <%= __('seconds') %>
+				<% if(info.uptime > 86400) { %>
+				(<%= Math.floor(info.uptime/86400) %> <%= __('days') %>)
+				<% } %>
+			</td>
+			<td><strong><%= __('Server Time') %></strong></td>
+			<td><%= moment(info.localTime).format('YYYY-MM-DD HH:mm:ss') %></td>
+		</tr>
+		<tr>
+			<td><strong><%= __('Current Connections') %></strong></td>
+			<td><span class="number"><%= info.connections.current %></span></td>
+			<td><strong><%= __('Available Connections') %></strong></td>
+			<td><span class="number"><%= info.connections.available %></span></td>
+		</tr>
+		<tr>
+			<td><strong><%= __('Total Inserts') %></strong></td>
+			<td><span class="number"><%= info.opcounters.insert %></span></td>
+			<td><strong><%= __('Total Queries') %></strong></td>
+			<td><span class="number"><%= info.opcounters.query %></span></td>
+		</tr>
+		<tr>
+			<td><strong><%= __('Total Updates') %></strong></td>
+			<td><span class="number"><%= info.opcounters.update %></span></td>
+			<td><strong><%= __('Total Deletes') %></strong></td>
+			<td><span class="number"><%= info.opcounters.delete %></span></td>
+		</tr>
+	</table>
+</div>
+<script>
+	$(function() {
+		$('.number').each(function() {
+			try {
+				var nu = parseInt($(this).text(), 10);
+				$(this).text(nu.toLocaleString());
+			} catch(err) {}
+		});
+	});
+</script>

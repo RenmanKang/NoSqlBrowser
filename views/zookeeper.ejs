@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title><%= title %></title>
+	<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+	<link rel="shortcut icon" href="/favicon.ico" />
+	<link rel="stylesheet" href="/lib/bootstrap-3.3.4/css/bootstrap.min.css" />
+	<link rel="stylesheet" href="/lib/bootstrap-table/bootstrap-table.min.css" />
+	<link rel="stylesheet" href="/lib/bootstrap-select/css/bootstrap-select.min.css" />
+	<link rel="stylesheet" href="/lib/jstree/themes/proton/style.min.css" />
+	<link rel="stylesheet" href="/css/style.css" />
+	<style>
+		.tree ul { margin-left: 6px; }
+		#tree { position:fixed; top:56px; left:5px; width:300px; border-right:1px solid #ddd; z-index:1; }
+		#zkTree { height:600px; overflow:scroll; }
+		#sidebarResize {
+			background-color: transparent; border: 10px solid transparent; cursor: col-resize;
+			height: 100%; position: absolute; right: -11px; top: 0; width: 1px;
+		}
+		#content { position:relative; left:280px; min-width:520px; width:75%; height:580px; margin-top:14px; }
+		#zk-path { margin-bottom:8px;font-weight:bold; }
+	</style>
+</head>
+<body>
+<% include ./common/gnb %>
+<div>
+	<div class="affix-top tree" id="tree" style="background-color:#fff;">
+		<div class="form-group" style="margin: 0;">
+			<select class="selectpicker" id="zk-host" name="zk-host" data-style="btn-info" data-width="294">
+				<% for(var i = 0; i < hosts.length; i++) { %>
+				<option value="<%= hosts[i] %>"><%= hosts[i] %></option>
+				<% } %>
+			</select>
+		</div>
+		<div style="">
+			<div class="input-group input-group-sm" style="margin:4px 4px 4px 0;">
+				<input type="text" class="form-control" id="search_path" value='<%= path %>'/>
+				<span class="input-group-btn">
+					<button type="button" class="btn btn-info" id="search-btn" title="<%= __('Search') %>">
+						<i class="glyphicon glyphicon-search"></i>
+					</button>
+				</span>
+				<span class="input-group-btn">
+					<button type="button" class="btn btn-info" id="refresh-btn" title="<%= __('Refresh') %>">
+						<i class="glyphicon glyphicon-refresh"></i>
+					</button>
+				</span>
+			</div>
+		</div>
+		<div id="zkTree"></div>
+		<div id="sidebarResize"></div>
+	</div>
+	<div id="content" class= "content sec-index" style="">
+		<div id="login">
+			<div class="auth-cls" style="display:none;margin-top:4px;">
+				<h3 style="margin-top:0;">Welcome, <%= user %></h3>
+				<input type="hidden" id="zk-user" value="<%= user %>" />
+			</div>
+			<div class="no-auth-cls" style="display:none;">
+				<button type="button" class="btn btn-info btn-sm" id="signin-btn" style="float:left;">
+					<i class="glyphicon glyphicon-log-in"></i> <%= __('Signin') %>
+				</button>
+				<div id="login-div" style="display:none;">
+					<form id="login-form" class="form-inline">
+						<input type="hidden" name="host" />
+						<div class="form-group">
+							<input type="text" class="form-control input-sm" name="zk_user" placeholder="Username" style="margin-left:4px;width:240px;" />
+						</div>
+						<div class="form-group">
+							<input type="password" class="form-control input-sm" name="zk_pass" placeholder="Password" style="width:240px;" />
+						</div>
+						<div class="form-group">
+							<button type="button" class="btn btn-info btn-sm" id="login-btn">
+								<i class="glyphicon glyphicon-send"></i> <%= __('Submit') %>
+							</button>
+						</div>
+					</form>
+				</div>
+				<div style="clear:both;"></div>
+			</div>
+		</div>
+		<div style="margin-top:18px;">
+			<div class="well well-sm" id="zk-path" style="margin-bottom:8px;"><%= path %></div>
+			<div class="auth-cls" style="display:none;text-align:right;">
+				<button type="button" class="btn btn-info btn-sm" id="new-path-btn"
+						data-toggle="tooltip" data-placement="top" data-original-title="<%= __('Create sub path') %>"><%= __('Create') %></button>
+				<button type="button" class="btn btn-info btn-sm" id="del-path-btn"
+						data-toggle="tooltip" data-placement="top" data-original-title="<%= __('Delete current path') %>"><%= __('Delete') %></button>
+				<form id="delete-form">
+					<input type="hidden" name="host" class="host" />
+					<input type="hidden" name="path" value="<%= path %>" class="path" />
+					<input type="hidden" name="version" class="version" />
+				</form>
+			</div>
+		</div>
+		<div id="alert-div"></div>
+		<table class="table table-bordered" style="margin-top:10px;">
+			<thead>
+			<tr>
+				<th><%= __('Name') %></th>
+				<th><%= __('Value') %></th>
+			</tr>
+			</thead>
+			<tbody id="zk-info">
+			</tbody>
+		</table>
+		<label><%= __('Data (Click on the value to edit it)') %> : </label>
+		<input type="hidden" id="zk-data" />
+		<div id="data-container" class="well well-sm" style="cursor:pointer;margin-bottom:30px;">
+		</div>
+		<div id="data-form" style="display:none;margin-bottom:30px;">
+			<form id="edit-form">
+				<input type="hidden" name="host" class="host" />
+				<input type="hidden" name="path" value="<%= path %>" class="path" />
+				<input type="hidden" name="version" class="version" />
+				<table>
+					<tr>
+						<td>
+							<textarea cols="78" rows="5" name="new_data" id="new_data" style="width:520px;height:100px;"></textarea>
+						</td>
+					</tr>
+					<tr>
+						<td style="padding-top:8px;">
+							<input type="submit" class="btn btn-info btn-sm" value="<%= __('Save') %>" id="data-save-btn" />
+							<input type="button" class="btn btn-info btn-sm" value="<%= __('Cancel') %>" id="data-cancel-btn" />
+						</td>
+					</tr>
+				</table>
+			</form>
+		</div>
+	</div>
+</div>
+<% include ./common/modals %>
+<% include ./common/script %>
+<script type="text/javascript" src="/lib/moment/moment.js"></script>
+<script type="text/javascript" src="/lib/bootstrap-select/js/bootstrap-select.min.js"></script>
+<script type="text/javascript" src="/lib/jstree/jstree.min.js"></script>
+<script type="text/javascript">
+	$(function() {
+		var zkUser = $('#zk-user').val();
+		if(!JSComm.isEmpty(zkUser)) {
+			$('.auth-cls').show();
+			$('.no-auth-cls').hide();
+		} else {
+			$('.auth-cls').hide();
+			$('.no-auth-cls').show();
+		}
+	});
+</script>
+<!-- for Left Tree Pannel -->
+<script type="text/javascript">
+	function loadTree(path) {
+		var host = $('#zk-host').val();
+		if(!path) path = '/';
+		$('#zkTree').jstree({
+			core : {
+				data : {
+					url : '/api/zookeeper/tree?host='+host+'&srch='+path,
+					dataType : 'json',
+					data : function (node) {
+						return { path : node.id };
+					}
+				},
+				multiple : false,
+				themes : {
+					name: 'proton',
+					responsive: true
+				}
+			}
+		});
+		$('#zkTree').bind('changed.jstree', function (e, data) {
+			loadPathInfo(data.selected);
+		}).bind('loaded.jstree', function(e, data) {
+			resizeApp();
+		});
+	}
+
+	function reloadTree() {
+		$('#zkTree').jstree('refresh');
+	}
+
+	function loadPathInfo(path) {
+		var host = $('#zk-host').val();
+		if(!path) path = '/';
+		else if(Array.isArray(path)) path = path[0];
+		$.get('/api/zookeeper/get', { host : host, path : path }, function(result) {
+			$("#bs-alert").remove();
+			$('#zk-path').text(result.path);
+
+			$('#zk-info').empty();
+			if(result.status === 200) {
+				var val;
+				for(var p in result.stat) {
+					val = (p === 'ctime' || p === 'mtime') ? moment(result.stat[p]).format('YYYY-MM-DD HH:mm:ss.SSS') : result.stat[p];
+					$('#zk-info').append('<tr><td>'+p+'</td><td>'+val+'</td></tr>');
+				}
+			} else {
+				BSAlert('danger', result.message, '#alert-div', true);
+			}
+
+			if(result.data) {
+				$('#data-container').text(result.data);
+				$('#zk-data').val(result.data);
+			} else {
+				$('#data-container').text('NO DATA OR EMPTY VALUE');
+				$('#zk-data').val('');
+			}
+			$('#data-container').show();
+			$('#data-form').hide();
+
+			$('.path').each(function() {
+				$(this).val(result.path);
+			});
+
+			var ver = result.stat ? result.stat.version : '';
+			$('.version').each(function() {
+				$(this).val(ver);
+			});
+
+			if(JSComm.isEmpty(result.user)) {
+				$('#zk-user').val('');
+				$('.auth-cls').hide();
+				$('.no-auth-cls').show();
+			} else {
+				$('#zk-user').val(result.user);
+			}
+			editing = false;
+		});
+	}
+
+	function searchTreeNodes(path) {
+		if(!JSComm.isEmpty(path)) {
+			$('#zkTree').jstree('destroy');
+			loadTree(path);
+			loadPathInfo(path);
+		}
+	}
+
+	function resizeApp() {
+		var barWidth = $('#zkTree').outerWidth(true);
+		$('#content').css('left', barWidth);
+		$('#zkTree').height($(window).height() - $('#zkTree').offset().top);
+		$('#sidebarResize').css('height', $('#tree').css('height'));
+	}
+
+	function setupResizeEvents() {
+		var sidebarResizing = false;
+		var sidebarFrame = $("#tree").width();
+
+		$('#zkTree').bind('resize', resizeApp);
+		$(window).bind('resize', resizeApp);
+
+		$(document).mouseup(function (event) {
+			sidebarResizing = false;
+			sidebarFrame = $("#tree").width();
+			$('body').removeClass('select-disabled');
+		});
+
+		$("#sidebarResize").mousedown(function (event) {
+			sidebarResizing = event.pageX;
+			$('body').addClass('select-disabled');
+		});
+
+		$(document).mousemove(function (event) {
+			if(sidebarResizing) {
+				var w = sidebarFrame - (sidebarResizing - event.pageX);
+				if(w > 240) {
+					$('#tree, .bootstrap-select').css('width', w-5);
+					$('#tree').width(w);
+					resizeApp();
+				}
+			}
+		});
+	}
+
+	$(function () {
+		loadTree('<%= path %>');
+		loadPathInfo('<%= path %>');
+		setupResizeEvents();
+
+		$('#zk-host').change(function() {
+			loadTree();
+			loadPathInfo();
+		});
+
+		$('#search_path').on('keypress', function(e) {
+			if(e.keyCode === 13) {
+				var path = $(this).val();
+				searchTreeNodes(path);
+			}
+		})
+
+		$('#search-btn').on('click', function() {
+			var path = $('#search_path').val();
+			searchTreeNodes(path);
+		});
+
+		$('#refresh-btn').on('click', function() {
+			$('#search_path').val('/');
+			searchTreeNodes('/');
+		});
+
+	});
+</script>
+<!-- for Right Content Pannel -->
+<script type="text/javascript">
+	$.ajaxSetup({ cache: false });
+
+	$(function() {
+		$('#signin-btn').click(function() {
+			var form = $("#login-div");
+			if(form.is(":hidden")) {
+				form.show();
+			} else {
+				form.hide();
+			}
+		});
+
+		$('#login-btn').click(function() {
+			$('#login-form').find("input[name='host']").val($('#zk-host').val());
+			$.ajax({
+				type: 'post',
+				url: '/api/zookeeper/login',
+				dataType: 'json',
+				data: $('#login-form').serialize(),
+				success: function(result) {
+					if(result.status === 200) {
+						$('#zk-user').val(result.user);
+						$('#zk-user').prev().text('Welcome, '+result.user);
+						$('.auth-cls').show();
+						$('.no-auth-cls').hide();
+					} else {
+						$('#alertModalBody').html('<p>'+result.message+'</p>');
+						$('#alertModel').modal('show');
+					}
+				},
+				error: function(err) {
+					console.log(err);
+					$('#alertModalBody').html('<p>'+err.message+'</p>');
+					$('#alertModel').modal('show');
+				}
+			});
+		});
+
+		$('#new-path-btn').click(function() {
+			alert('Create new path');
+		});
+
+		$('#del-path-btn').click(function() {
+			$('#delete-form').find("input[name='host']").val($('#zk-host').val());
+			var path = $('#delete-form').find("input[name='path']").val();
+			var lastPartIndex = path.lastIndexOf("/");
+			var parenPath = path.substring(0, lastPartIndex);
+			if(confirm('Are you sure want to delete ' + path + '?')) {
+				$.ajax({
+					type: 'post',
+					url: '/api/zookeeper/delete',
+					dataType: 'json',
+					data: $('#delete-form').serialize(),
+					success: function(result) {
+						if(result.status === 200) {
+							reloadTree();
+							loadPathInfo(parenPath);
+						} else {
+							$('#alertModalBody').html('<p>'+result.message+'</p>');
+							$('#alertModel').modal('show');
+						}
+					},
+					error: function(err) {
+						console.log(err);
+						$('#alertModalBody').html('<p>'+err.message+'</p>');
+						$('#alertModel').modal('show');
+					}
+				});
+			}
+		});
+	});
+
+	var editing = false;
+	$(function() {
+		$('#data-container').click(function() {
+			var zkUser = $('#zk-user').val();
+			if(!JSComm.isEmpty(zkUser)) {
+				if(!editing) {
+					editing = true;
+					var value = $('#zk-data').val();
+					$('#new_data').val(value);
+					$('#data-container').hide();
+					$('#data-form').show();
+					$('#new_data').focus();
+				}
+			} else {
+				alert ("Please sign in first.");
+			}
+		});
+		$('#data-save-btn').click(function(e) {
+			var value = $('#zk-data').val();
+			var new_data = $('#new_data').val();
+			if(new_data != value) {
+				$('#edit-form').find("input[name='host']").val($('#zk-host').val());
+				$.post('/api/zookeeper/edit', $('#edit-form').serialize(), function(data) {
+					console.log(data);
+					if(data.status === 200) {
+						$('#new_data').val(new_data);
+						$('#data-container').text(new_data);
+						$('#data-container').show();
+						$('#data-form').hide();
+					} else {
+						alert(data.message);
+					}
+				});
+			} else {
+				if(JSComm.isEmpty(value)) {
+					value = 'NO DATA OR EMPTY VALUE';
+				}
+				$('#data-container').text(value);
+				$('#data-container').show();
+				$('#data-form').hide();
+			}
+			editing = false;
+			return false;
+		});
+		$('#data-cancel-btn').click(function(e) {
+			var value = $('#zk-data').val();
+			if(JSComm.isEmpty(value)) {
+				value = 'NO DATA OR EMPTY VALUE';
+			}
+			$('#data-container').text(value);
+			$('#data-container').show();
+			$('#data-form').hide();
+			editing = false;
+			return false;
+		});
+	});
+</script>
+</body>
+</html>

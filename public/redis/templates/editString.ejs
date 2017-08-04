@@ -1,0 +1,23 @@
+<div id="itemActionsBar">
+	<button class="btn btn-danger btn-sm" onclick="deleteKey('<%= connectionId %>','<%= key %>')">Delete Key</button>
+</div>
+<div id="itemData">
+	<form id="editStringForm" action="/apiv1/key/<%= connectionId %>/<%= key %>" method="POST" class="form-vertical">
+		<div style="margin-top:6px;">
+			<label>Key: <b><%= key %></b></label>
+		</div>
+		<div style="margin-top:6px;">
+			<label>Value:</label>
+		</div>
+		<div>
+			<input type="hidden" id="isJson" name="isJson">
+			<textarea id="stringValue" name="stringValue" style="width: 600px; height: 300px;"></textarea>
+			<span class="clippyWrapper" title="copy to clipboard">
+				<span id="stringValueClippy"></span>
+			</span>
+		</div>
+		<div style="margin-top:6px;margin-bottom:12px;">
+			<button id="saveKeyButton" class="btn btn-info btn-sm" onclick="$('#editStringForm').submit()">Save</button>
+		</div>
+	</form>
+</div>

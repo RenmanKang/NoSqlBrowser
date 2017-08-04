@@ -1,0 +1,44 @@
+body {
+	font-family: Verdana, sans-serif;
+	font-size: 73%;
+	padding: 0;
+	margin: 0;
+}
+
+input, select, textarea {
+	border: 1px solid #cecece;
+	padding: 1px 3px;
+	background: white;
+}
+
+select {
+	padding: 0;
+}
+
+.saf select {
+	margin-top: 0;
+	margin-bottom: 0;
+}
+
+textarea, code {
+	font-family: monospace;
+	font-size: 13px;
+}
+
+button::-moz-focus-inner {
+	border: none;
+}
+
+.pull-left {
+	float: left;
+}
+
+.pull-right {
+	float: right;
+}
+
+.loading  {
+	background-image: url(loading.gif);
+	background-repeat: no-repeat;
+	text-indent: 20px;
+}

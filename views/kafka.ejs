@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title><%= title %></title>
+	<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+	<link rel="shortcut icon" href="/favicon.ico" />
+	<link rel="stylesheet" href="/lib/bootstrap-3.3.4/css/bootstrap.min.css" />
+	<link rel="stylesheet" href="/lib/bootstrap-table/bootstrap-table.min.css" />
+	<link rel="stylesheet" href="/lib/bootstrap-select/css/bootstrap-select.min.css" />
+	<link rel="stylesheet" href="/lib/jstree/themes/proton/style.min.css" />
+	<link rel="stylesheet" href="/css/style.css" />
+	<style>
+		.tree ul { margin-left: 6px; }
+		#tree { position:fixed; top:56px; left:5px; width:300px; border-right:1px solid #ddd; z-index:1; }
+		#kafkaTree { height:600px; overflow:scroll; }
+		#sidebarResize {
+			background-color: transparent; border: 10px solid transparent; cursor: col-resize;
+			height: 100%; position: absolute; right: -11px; top: 0; width: 1px;
+		}
+		#content { position:relative; left:280px; min-width:520px; width:75%; height:580px; margin-top:14px;}
+		#content-refresh-btn { float: right; position: relative; top: -2px; }
+		.content-title { font-weight: 500; font-size: 20px; padding: 10px; margin-bottom: 16px; overflow:hidden; }
+		._center { text-align: center; }
+		._right { text-align: right; }
+	</style>
+</head>
+<body>
+<% include ./common/gnb %>
+<div>
+	<div class="affix-top tree" id="tree" style="background-color:#fff;">
+		<div style="margin-bottom:4px;">
+			<div class="input-group input-group-sm" style="margin:0 4px 0 0">
+				<input type="text" class="form-control" id="search-node" />
+				<span class="input-group-btn">
+					<button type="button" class="btn btn-info" id="search-btn" title="<%= __('Search') %>">
+						<i class="glyphicon glyphicon-search"></i>
+					</button>
+				</span>
+				<span class="input-group-btn">
+					<button type="button" class="btn btn-info" id="refresh-btn" title="<%= __('Refresh') %>">
+						<i class="glyphicon glyphicon-refresh"></i>
+					</button>
+				</span>
+			</div>
+		</div>
+		<div id="kafkaTree"></div>
+		<div id="sidebarResize"></div>
+	</div>
+	<div id="content" class= "content sec-index" style="background-color:#fff;">
+		<input type="hidden" id="curr-node" />
+		<div class="well content-title">
+			<span id="content-title"></span>
+			<button type="button" class="btn btn-info btn-xs" id="content-refresh-btn" data-state="refresh" title="<%= __('Refresh') %>">
+				<i class="glyphicon glyphicon-refresh"></i>
+			</button>
+		</div>
+		<div id="alert-div"></div>
+		<table class="table" id="data-tb">
+		</table>
+	</div>
+</div>
+<% include ./common/modals %>
+<% include ./common/script %>
+<script type="text/javascript" src="/lib/moment/moment.js"></script>
+<script type="text/javascript" src="/lib/bootstrap-select/js/bootstrap-select.min.js"></script>
+<script type="text/javascript" src="/lib/jstree/jstree.min.js"></script>
+<script type="text/javascript">
+	$(function () {
+		loadTree();
+		setupResizeEvents();
+		$('#content-refresh-btn').on('click', function() {
+			var state = $(this).attr('data-state');
+			if(state == 'refresh') {
+				if(contentTimer) { clearTimeout(contentTimer); }
+				$(this).attr('data-state', 'stop');
+				$(this).find('i').removeClass('glyphicon-refresh').addClass('glyphicon-play');
+			} else {
+				$(this).attr('data-state', 'refresh');
+				$(this).find('i').removeClass('glyphicon-play').addClass('glyphicon-refresh');
+				loadContent($('#curr-node').val());
+			}
+		});
+	});
+
+	function resizeApp() {
+		var barWidth = $('#kafkaTree').outerWidth(true);
+		$('#content').css('left', barWidth);
+		$('#kafkaTree').height($(window).height() - $('#kafkaTree').offset().top);
+		$('#sidebarResize').css('height', $('#tree').css('height'));
+	}
+
+	function setupResizeEvents() {
+		var sidebarResizing = false;
+		var sidebarFrame = $("#tree").width();
+
+		$('#kafkaTree').bind('resize', resizeApp);
+		$(window).bind('resize', resizeApp);
+
+		$(document).mouseup(function (event) {
+			sidebarResizing = false;
+			sidebarFrame = $("#tree").width();
+			$('body').removeClass('select-disabled');
+		});
+
+		$("#sidebarResize").mousedown(function (event) {
+			sidebarResizing = event.pageX;
+			$('body').addClass('select-disabled');
+		});
+
+		$(document).mousemove(function (event) {
+			if(sidebarResizing) {
+				var w = sidebarFrame - (sidebarResizing - event.pageX);
+				if(w > 240) {
+					$('#tree').width(w);
+					resizeApp();
+				}
+			}
+		});
+	}
+
+	function loadTree() {
+		$('#kafkaTree').jstree({
+			core : {
+				data : {
+					url : '/api/kafka/tree?srch=',
+					dataType : 'json',
+					data : function (node) {
+						return { path : node.id };
+					}
+				},
+				multiple : false,
+				themes : {
+					name: 'proton',
+					responsive: true
+				}
+			},
+			plugins : [ 'search' ]
+		});
+		//$('#kafkaTree').bind('changed.jstree', function (e, data) {
+		$('#kafkaTree').bind('select_node.jstree', function (e, data) {
+			loadContent(data.selected);
+		}).bind('loaded.jstree', function(e, data) {
+			resizeApp();
+			$('#search-node').on('keyup', searchNode);
+			$('#search-btn').on('click', searchNode);
+			$('#refresh-btn').on('click', reloadTree);
+			$('#kafkaTree').jstree('select_node', '#broker_anchor');
+		});
+	}
+
+	function reloadTree() {
+		$('#kafkaTree').jstree('refresh');
+	}
+
+	var srchTimer = false;
+	function searchNode() {
+		var val = $('#search-node').val();
+		if(!JSComm.isEmpty(val)) {
+			if(srchTimer) { clearTimeout(srchTimer); }
+			srchTimer = setTimeout(function () {
+				$('#kafkaTree').jstree(true).search(val);
+			}, 250);
+		}
+	}
+
+	var contentTimer = false;
+	function loadContent(node) {
+		if(node && Array.isArray(node)) {
+			node = node[0];
+		}
+		if(contentTimer) { clearTimeout(contentTimer); }
+		$('#content-refresh-btn').attr('disabled', 'disabled');
+		$.get('/api/kafka/content?node='+node, function(result) {
+			$("#bs-alert").remove();
+			if(result.status === 200) {
+				$('#data-tb').empty();
+				if(result.type === 'broker') {
+					if(result.name) {
+						setBrokerInfo(result);
+					} else {
+						setBrokerList(result);
+					}
+				} else if(result.type === 'topic') {
+					if(result.name) {
+						setTopicConsumerList(result);
+					} else {
+						setTopicList(result);
+					}
+				} else if(result.type == 'consumer') {
+					if(result.name) {
+						setConsumerTopicList(result);
+					} else {
+						setConsumerList(result);
+					}
+				}
+				$('#curr-node').val(node);
+				if($('#content-refresh-btn').attr('data-state') == 'refresh') {
+					contentTimer = setTimeout(function() {
+						loadContent(node);
+					}, 5000);
+				}
+			} else {
+				BSAlert('danger', result.message, '#alert-div', true);
+			}
+			$('#content-refresh-btn').removeAttr('disabled');
+		});
+	}
+
+	function setBrokerList(result) {
+		$('#content-title').text('Broker List');
+		$('#data-tb').removeClass('table-bordered');
+		var thead, tbody, tr;
+		$('#data-tb').append('<colgroup><col width="10%" /><col /><col width="15%"/><col width="15%"/></colgroup>');
+		thead = $('<thead>');
+		tr = $('<tr class="info">');
+		tr.append('<th class="_center">ID</th>');
+		tr.append('<th>Host</th>');
+		tr.append('<th>Port</th>');
+		tr.append('<th class="_right">Topic Count</th>');
+		thead.append(tr);
+		$('#data-tb').append(thead);
+		var list = result.data;
+		var len = list ? list.length : 0;
+		if(len > 0) {
+			for(var i = 0; i < len; i++) {
+				var cls = (i % 2) === 0 ? 'success' : '';
+				tbody = $('<tbody>');
+				tr = $('<tr class="'+cls+' broker">');
+				tr.append('<td class="_center">'+list[i].id+'</td>');
+				tr.append('<td>'+list[i].data.host+'</td>');
+				tr.append('<td>'+list[i].data.port+'</td>');
+				tr.append('<td class="_right">'+list[i].topicCount.toLocaleString()+'</td>');
+				tbody.append(tr);
+				$('#data-tb').append(tbody);
+			}
+		} else {
+			$('#data-tb').append('<tbody><tr><td colspan="4" class="_center"><strong>Broker list not found</strong></td></tr></tbody>');
+		}
+	}
+
+	function setBrokerInfo(result) {
+		$('#content-title').text('Broker '+result.data.data.host+':'+result.data.data.port);
+		$('#data-tb').addClass('table-bordered');
+		var thead, tbody, tr;
+		thead = $('<thead>');
+		tr = $('<tr class="info">');
+		tr.append('<th><%= __('Name') %></th>');
+		tr.append('<th><%= __('Value') %></th>');
+		thead.append(tr);
+		$('#data-tb').append(thead);
+
+		tbody = $('<tbody>');
+		tbody.append('<tr><td>ID</td><td>'+result.data.id+'</td></tr>');
+		tbody.append('<tr><td>Host</td><td>'+result.data.data.host+'</td></tr>');
+		tbody.append('<tr><td>Port</td><td>'+result.data.data.port+'</td></tr>');
+
+		var stat = result.data && result.data.stat;
+		var val;
+		for(var p in stat) {
+			val = (p === 'ctime' || p === 'mtime') ? moment(stat[p]).format('YYYY-MM-DD HH:mm:ss') : stat[p];
+			tbody.append('<tr><td>'+p+'</td><td>'+val+'</td></tr>');
+		}
+		$('#data-tb').append(tbody);
+	}
+
+	function setTopicList(result) {
+		$('#content-title').text('Topic List');
+		$('#data-tb').removeClass('table-bordered');
+
+		var thead, tbody, tr;
+		thead = $('<thead>');
+		tr = $('<tr class="info">');
+		tr.append('<th>Topic</th>');
+		tr.append('<th class="_center">Partition</th>');
+		tr.append('<th class="_right">Log Size</th>');
+		tr.append('<th class="_center">Leader</th>');
+		thead.append(tr);
+		$('#data-tb').append(thead);
+
+		var list = result.data;
+		var len = list ? list.length : 0;
+		if(len > 0) {
+			for(var i = 0; i < len; i++) {
+				tbody = $('<tbody>');
+				tr = $('<tr class="success topic">');
+				tr.append('<td>'+list[i].topic+'</td>');
+				tr.append('<td class="_center">-</td>');
+				tr.append('<td class="_right">'+list[i].logSize.toLocaleString()+'</td>');
+				tr.append('<td class="_center">-</td>');
+				tbody.append(tr);
+
+				var parts = list[i].partitions;
+				for(var j = 0; j < parts.length; j++) {
+					tr = $('<tr class="partition">');
+					tr.append('<td></td>');
+					tr.append('<td class="_center">'+parts[j].partition+'</td>');
+					tr.append('<td class="_right">'+parts[j].logSize.toLocaleString()+'</td>');
+					tr.append('<td class="_center">'+parts[j].broker+'</td>');
+					tbody.append(tr);
+				}
+				$('#data-tb').append(tbody);
+			}
+		} else {
+			$('#data-tb').append('<tbody><tr><td colspan="4" class="_center"><strong>Topic list not found</strong></td></tr></tbody>');
+		}
+	}
+
+	function setTopicConsumerList(result) {
+		$('#content-title').text('Topic '+result.name);
+		$('#data-tb').removeClass('table-bordered');
+
+		var thead, tbody, tr;
+
+		thead = $('<thead>');
+		tr = $('<tr class="info">');
+		tr.append('<th>Consumer</th>');
+		tr.append('<th class="_center">Partition</th>');
+		tr.append('<th class="_right">Offset</th>');
+		tr.append('<th class="_right">Log Size</th>');
+		tr.append('<th class="_right">Lag</th>');
+		tr.append('<th class="_center">Owner</th>');
+		tr.append('<th class="_center">Created</th>');
+		tr.append('<th class="_center">Last Seen</th>');
+		thead.append(tr);
+		$('#data-tb').append(thead);
+
+		var list = result.data;
+		var len = list ? list.length : 0;
+		if(len > 0) {
+			for(var i = 0; i < len; i++) {
+				tbody = $('<tbody>');
+				tr = $('<tr class="success consumer">');
+				tr.append('<td><a href="#" class="chart-link">'+list[i].consumer+'</a></td>');
+				tr.append('<td></td>');
+				tr.append('<td class="_right">'+list[i].offset.toLocaleString()+'</td>');
+				tr.append('<td class="_right">'+list[i].logSize.toLocaleString()+'</td>');
+				tr.append('<td class="_right">'+list[i].lag.toLocaleString()+'</td>');
+				tr.append('<td></td>');
+				tr.append('<td></td>');
+				tr.append('<td></td>');
+				tbody.append(tr);
+				var parts = list[i].partitions;
+				for(var j = 0; j < parts.length; j++) {
+					tr = $('<tr class="partition">');
+					tr.append('<td></td>');
+					tr.append('<td class="_center">'+parts[j].partition+'</td>');
+					tr.append('<td class="_right">'+parts[j].offset.toLocaleString()+'</td>');
+					tr.append('<td class="_right">'+parts[j].logSize.toLocaleString()+'</td>');
+					tr.append('<td class="_right">'+parts[j].lag.toLocaleString()+'</td>');
+					tr.append('<td class="_center">'+(parts[j].owner ? parts[j].owner : '')+'</td>');
+					tr.append('<td class="_center">'+(parts[j].ctime ? moment(parts[j].ctime).format('YYYY-MM-DD HH:mm:ss') : '')+'</td>');
+					tr.append('<td class="_center">'+(parts[j].mtime ? moment(parts[j].mtime).format('YYYY-MM-DD HH:mm:ss') : '')+'</td>');
+					tbody.append(tr);
+				}
+				$('#data-tb').append(tbody);
+			}
+
+			$('.chart-link').on('click', function(e) {
+				e.preventDefault();
+				var url = 'kafka/chart/'+result.name+'/'+$(this).text();
+				showChart(url);
+			});
+		} else {
+			$('#data-tb').append('<tbody><tr><td colspan="8" class="_center"><strong>Consumer list not found</strong></td></tr></tbody>');
+		}
+	}
+
+	function showChart(url) {
+		var popWnd;
+		var status = "toolbar=no, location=no, directories=no, status=no, menubar=no, scrollbars=yes";
+		/*
+		if(self.screen) {
+			popWnd = window.open(url, '_blank', status);
+			popWnd.resizeTo(screen.width, screen.height);
+			popWnd.moveTo(0, 0);
+		} else {
+			status += ", fullscreen=yes, resizable=yes";
+			popWnd = window.open(url, '_blank', status);
+		}
+		*/
+		popWnd = window.open(url, '_blank', status);
+	}
+
+	function setConsumerList(result) {
+		$('#content-title').text('Consumer List');
+		$('#data-tb').removeClass('table-bordered');
+		// result.data = [ { consumer: '', topics: [ { topic: '', offset: 0, partitions: [ partition: 0, offset: 0 ] } ] } ]
+
+		$('#data-tb').append('<colgroup><col width="5%" /><col /><col width="8%"/><col width="8%"/><col width="18%"/><col width="18%"/></colgroup>');
+
+		var thead, tbody, tr;
+
+		thead = $('<thead>');
+		tr = $('<tr class="info">');
+		tr.append('<th>Consumer</th>');
+		tr.append('<th>Topic</th>');
+		tr.append('<th class="_center">Partition</th>');
+		tr.append('<th class="_right">Offset</th>');
+		tr.append('<th class="_center">Created</th>');
+		tr.append('<th class="_center">Last Seen</th>');
+		thead.append(tr);
+		$('#data-tb').append(thead);
+
+		var list = result.data;
+		var len = list ? list.length : 0;
+		if(len > 0) {
+			for(var i = 0; i < len; i++) {
+				tbody = $('<tbody>');
+				tr = $('<tr class="success consumer">');
+				tr.append('<td colspan="7">'+list[i].consumer+'</td>');
+				tbody.append(tr);
+				var topics = list[i].topics;
+				if(topics && topics.length > 0) {
+					for(var j = 0; j < topics.length; j++) {
+						tr = $('<tr class="active topic">');
+						tr.append('<td></td>');
+						tr.append('<td>'+topics[j].topic+'</td>');
+						tr.append('<td></td>');
+						tr.append('<td class="_right">'+topics[j].offset.toLocaleString()+'</td>');
+						tr.append('<td></td>');
+						tr.append('<td></td>');
+						tbody.append(tr);
+						var parts = topics[j].partitions;
+						for(var x = 0; x < parts.length; x++) {
+							tr = $('<tr class="partition">');
+							tr.append('<td></td>');
+							tr.append('<td></td>');
+							tr.append('<td class="_center">'+parts[x].partition+'</td>');
+							tr.append('<td class="_right">'+parts[x].offset.toLocaleString()+'</td>');
+							tr.append('<td class="_center">'+(parts[x].ctime ? moment(parts[x].ctime).format('YYYY-MM-DD HH:mm:ss') : '')+'</td>');
+							tr.append('<td class="_center">'+(parts[x].mtime ? moment(parts[x].mtime).format('YYYY-MM-DD HH:mm:ss') : '')+'</td>');
+							tbody.append(tr);
+						}
+					}
+				} else {
+					tr = $('<tr class="topic">');
+					tr.append('<td colspan="6">&nbsp;&nbsp;Topic list not found</td>');
+					tbody.append(tr);
+				}
+				$('#data-tb').append(tbody);
+			}
+		} else {
+			$('#data-tb').append('<tbody><tr><td colspan="6">&nbsp;&nbsp;<strong>Consumer list not found</strong></td></tr></tbody>');
+		}
+	}
+
+	function setConsumerTopicList(result) {
+		$('#content-title').text('Consumer '+result.name);
+		$('#data-tb').removeClass('table-bordered');
+
+		var thead, tbody, tr;
+
+		thead = $('<thead>');
+		tr = $('<tr class="info">');
+		tr.append('<th>Topic</th>');
+		tr.append('<th class="_center">Partition</th>');
+		tr.append('<th class="_right">Offset</th>');
+		tr.append('<th class="_right">Log Size</th>');
+		tr.append('<th class="_right">Lag</th>');
+		tr.append('<th class="_center">Created</th>');
+		tr.append('<th class="_center">Last Seen</th>');
+		thead.append(tr);
+		$('#data-tb').append(thead);
+
+		var list = result.data;
+		var len = list ? list.length : 0;
+		if(len > 0) {
+			for(var i = 0; i < len; i++) {
+				tbody = $('<tbody>');
+				tr = $('<tr class="success topic">');
+				tr.append('<td><a href="#" class="chart-link">'+list[i].topic+'</a></td>');
+				tr.append('<td></td>');
+				tr.append('<td class="_right">'+list[i].offset.toLocaleString()+'</td>');
+				tr.append('<td class="_right">'+list[i].logSize.toLocaleString()+'</td>');
+				tr.append('<td class="_right">'+list[i].lag.toLocaleString()+'</td>');
+				tr.append('<td></td>');
+				tr.append('<td></td>');
+				tbody.append(tr);
+				var parts = list[i].partitions;
+				for(var j = 0; j < parts.length; j++) {
+					tr = $('<tr class="partition">');
+					tr.append('<td></td>');
+					tr.append('<td class="_center">'+parts[j].partition+'</td>');
+					tr.append('<td class="_right">'+parts[j].offset.toLocaleString()+'</td>');
+					tr.append('<td class="_right">'+parts[j].logSize.toLocaleString()+'</td>');
+					tr.append('<td class="_right">'+parts[j].lag.toLocaleString()+'</td>');
+					tr.append('<td class="_center">'+(parts[j].ctime ? moment(parts[j].ctime).format('YYYY-MM-DD HH:mm:ss') : '')+'</td>');
+					tr.append('<td class="_center">'+(parts[j].mtime ? moment(parts[j].mtime).format('YYYY-MM-DD HH:mm:ss') : '')+'</td>');
+					tbody.append(tr);
+				}
+				$('#data-tb').append(tbody);
+			}
+
+			$('.chart-link').on('click', function(e) {
+				e.preventDefault();
+				var url = 'kafka/chart/'+$(this).text()+'/'+result.name;
+				showChart(url);
+			});
+		} else {
+			$('#data-tb').append('<tbody><tr><td colspan="7" class="_center">&nbsp;&nbsp;<strong>Topic list not found</strong></td></tr></tbody>');
+		}
+	}
+</script>
+</body>
+</html>

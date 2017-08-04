@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>logger admin</title>
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<link rel="shortcut icon" href="/favicon.ico">
+	<link rel="stylesheet" href="/lib/bootstrap-3.3.4/css/bootstrap.min.css" />
+	<link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+<% include ./common/gnb %>
+<div class="container">
+	<div class="starter-template">
+		<h3><%= message %></h3>
+		<p><%= error.status %></p>
+		<div>
+			<pre><%= error.stack %></pre>
+		</div>
+	</div>
+</div>
+<% include ./common/script %>
+</body>
+</html>

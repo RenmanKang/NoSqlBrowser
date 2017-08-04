@@ -1,0 +1,44 @@
+<form class="form-horizontal" role="form" id="redisExportForm">
+	<div class="">
+		<div style="margin-left:4px;">
+			<label class="ontrol-label" style="margin-top:4px;">Connection</label>
+		</div>
+		<div class="">
+			<select name="connection" class="selectpicker" data-style="btn-info">
+				<% var connections = getConnections(); %>
+				<% connections.forEach(function(connection, index) {%>
+				<% if (index == 0) { %>
+				<option value="<%=connection.connection_options.host%>:<%=connection.connection_options.port%>:<%=connection.selected_db%>"><%=connection.connection_options.host%>:<%=connection.connection_options.port%>:<%=connection.selected_db%></option>
+				<% } else { %>
+				<option value="<%=connection.connection_options.host%>:<%=connection.connection_options.port%>:<%=connection.selected_db%>"><%=connection.connection_options.host%>:<%=connection.connection_options.port%>:<%=connection.selected_db%></option>
+				<% }}); %>
+			</select>
+		</div>
+	</div>
+	<div class="" style="margin-top:10px;">
+		<div style="margin-left:4px;margin-bottom:4px;">
+			<label class="control-label">Data type</label>
+		</div>
+		<div class="btn-group" data-toggle="buttons" id="export-type">
+			<label class="btn btn-info active">
+				<input type="radio" id="export-type1" name="type" value="redis"> Redis
+			</label>
+			<label class="btn btn-info">
+				<input type="radio" id="export-type2" name="type" value="json"> JSON
+			</label>
+		</div>
+	</div>
+	<!--<div class="control-group">
+		<label class="control-label" for="compressExportField">Compress</label>
+		<div class="controls">
+		  <input type="checkbox" name="compress" value="1" id="compressExportField">
+		</div>
+	  </div>-->
+	<!--
+		<div class="" style="margin-top:16px;">
+			<div class="">
+				<button type="submit" class="btn btn-primary" id="export-btn"><%= __('Export') %></button>
+			</div>
+		</div>
+		-->
+</form>

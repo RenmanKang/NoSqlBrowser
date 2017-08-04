@@ -1,14 +1,4 @@
-# NoSqlBrowser
-
-## Install
-```
-npm install
-```
-
-## Configuration
-- config/config.js에서 설정 정보 수정
-```
-{
+module.exports = {
 	"host": "localhost",
 	"port": 5056,
 	"locales": [
@@ -99,13 +89,4 @@ npm install
 		"maxConnection": 20,
 		"connectionTimeout": 3000
 	}
-}
-```
-
-## Run
-```
-npm start
-```
-
-## Browse
-- 브라우저로 접속: http://localhost:5056
+};

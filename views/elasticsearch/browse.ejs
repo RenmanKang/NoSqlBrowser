@@ -1,0 +1,36 @@
+<div role="tabpanel" class="tab-pane active" id="<%= tabId %>">
+	<div class="param-box input-group">
+		<span class="input-group-btn">
+        	<button class="btn btn-default" type="button" disabled="disabled">Params</button>
+		</span>
+		<input type="text" class="form-control" id="<%= tabId %>__param" placeholder="Qurey Params...">
+	</div>
+	<div class="query-box">
+		<button type="button" class="btn btn-xs" id="<%= tabId %>__query_btn" title="Query"><i class="glyphicon glyphicon-info-sign" /> Query</button>
+		<textarea class="span9 query" id="<%= tabId %>__query" name="query">{
+  "query":{
+    "match_all":{}
+  },
+  "sort":[
+    {"logTime":{"order":"desc","ignoreUnmapped":true}}
+  ]
+}</textarea>
+	</div>
+	<div class="exec-box">
+		<div id="<%= tabId %>__exbtn" class="left" style="text-align:left;">
+			<button type="button" id="<%= tabId %>__exec" class="btn btn-xs" title="Execute Query">
+				<i class="glyphicon glyphicon glyphicon-play" />
+				Execute Query
+			</button>
+		</div>
+		<div id="<%= tabId %>__pg" style="text-align:right;">
+			<button type="button" id="<%= tabId %>__prev" class="btn btn-xs" title="Prev"><i class="glyphicon glyphicon-triangle-left" /></button>
+			<input type="text" id="<%= tabId %>__from" name="from" value="<%= from %>" class="pg-prev" title="From" />
+			<input type="text" id="<%= tabId %>__size" name="size" value="<%= size %>" class="pg-next" title="Size" />
+			<button type="button" id="<%= tabId %>__next" class="btn btn-xs" title="Next"><i class="glyphicon glyphicon-triangle-right" /></button>
+		</div>
+	</div>
+	<div class="result-box">
+		<textarea class="span9" id="<%= tabId %>__res" name="result" style="display:none;"><%= documents %></textarea>
+	</div>
+</div>

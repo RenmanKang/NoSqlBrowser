@@ -1,0 +1,9 @@
+[
+	{
+		"name" : "ns-browser",
+		"script" : "./bin/www",
+		"args" : "[]",
+		"exec_mode" : "cluster",
+		"instances" : "1"
+	}
+]

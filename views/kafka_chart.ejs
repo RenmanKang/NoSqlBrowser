@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title><%= title %></title>
+	<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+	<link rel="shortcut icon" href="/favicon.ico" />
+	<link rel="stylesheet" href="/lib/bootstrap-3.3.4/css/bootstrap.min.css" />
+	<link rel="stylesheet" href="/lib/bootstrap-select/css/bootstrap-select.min.css" />
+	<link rel="stylesheet" href="/lib/jstree/themes/proton/style.min.css" />
+	<link rel="stylesheet" href="/css/style.css" />
+	<style>
+		body { padding-top: 30px; }
+		#content-title { font-weight: 500; font-size: 20px; padding: 10px; margin-bottom: 26px; }
+	</style>
+</head>
+<body>
+<div>
+	<div id="content" class= "content sec-index" style="background-color:#fff;">
+		<div class="well content-title" id="content-title">
+			Topic: <%= topic %> / Consumer: <%= consumer %>
+		</div>
+		<div style="margin-bottom:4px;">
+			<select class="selectpicker" id="interval" data-style="btn-info btn-xs" data-width="100">
+				<option value="1000">1 <%= __('sec') %></option>
+				<option value="2000">2 <%= __('sec') %></option>
+				<option value="3000">3 <%= __('sec') %></option>
+				<option value="5000">5 <%= __('sec') %></option>
+				<option value="10000">10 <%= __('sec') %></option>
+			</select>
+			<span class="badge-group">
+				<button class="btn btn-xs btn-primary res-btn" type="button"
+						data-toggle="tooltip" data-placement="top" data-original-title="<%= __('Current Time') %>">
+					<span class="glyphicon glyphicon-time"></span>
+					<span class="badge time-badge" id="time-badge"></span>
+				</button>
+			</span>
+			<span class="badge-group">
+				<button class="btn btn-xs btn-info res-btn" type="button"
+						data-toggle="tooltip" data-placement="top" data-original-title="<%= __('Log Size') %>">
+					<span class="glyphicon glyphicon-log-in"></span>
+					<span class="badge total-badge" id="logsize-badge">0</span>
+				</button>
+			</span>
+			<span class="badge-group">
+				<button class="btn btn-xs btn-warning res-btn" type="button"
+						data-toggle="tooltip" data-placement="top" data-original-title="<%= __('Offset') %>">
+					<span class="glyphicon glyphicon-log-out"></span>
+					<span class="badge success-badge" id="offset-badge">0</span>
+				</button>
+			</span>
+			<span class="badge-group">
+				<button class="btn btn-xs btn-danger res-btn" type="button"
+						data-toggle="tooltip" data-placement="top" data-original-title="<%= __('Lag') %>">
+					<span class="glyphicon glyphicon-pause"></span>
+					<span class="badge fail-badge" id="lag-badge">0</span>
+				</button>
+			</span>
+
+			<div style="float:right;">
+				<span class="badge-group">
+					<button class="btn btn-xs btn-primary res-btn" type="button"
+							data-toggle="tooltip" data-placement="top" data-original-title="<%= __('Process Time') %>">
+						<span class="glyphicon glyphicon-time"></span>
+						<span class="badge time-badge" id="proc-time-badge"></span>
+					</button>
+				</span>
+				<span class="badge-group">
+					<button class="btn btn-xs btn-info res-btn" type="button"
+							data-toggle="tooltip" data-placement="top" data-original-title="<%= __('Log Increment') %>">
+						<span class="glyphicon glyphicon-log-in"></span>
+						<span class="badge total-badge" id="proc-logsize-badge">0</span>
+					</button>
+				</span>
+				<span class="badge-group">
+					<button class="btn btn-xs btn-warning res-btn" type="button"
+							data-toggle="tooltip" data-placement="top" data-original-title="<%= __('Offset Increment') %>">
+						<span class="glyphicon glyphicon-log-out"></span>
+						<span class="badge success-badge" id="proc-offset-badge">0</span>
+					</button>
+				</span>
+			</div>
+			<div style="clear:both;"></div>
+		</div>
+		<div id="res-chart">
+		</div>
+	</div>
+</div>
+<% include ./common/script %>
+<script type="text/javascript" src="/lib/moment/moment.js"></script>
+<script type="text/javascript" src="/lib/bootstrap-select/js/bootstrap-select.min.js"></script>
+<script type="text/javascript" src="/lib/socket.io/socket.io.js"></script>
+<script type="text/javascript" src="/lib/highcharts/highcharts.3.0.9.js"></script>
+<script>
+	Highcharts.setOptions({
+		global: {useUTC: true, timezoneOffset: (new Date()).getTimezoneOffset()}
+	});
+
+	var _Chart = {
+		connected: false,
+		isOn: false,
+		isFirst: true,
+		chartMax: 60,
+		chart: new Highcharts.Chart({
+			chart: {
+				renderTo: 'res-chart',
+				type: 'line',
+				zoomType: 'x',
+				animation: Highcharts.svg, // don't animate in old IE
+				borderColor: '#efefef',
+				borderWidth: 1,
+				marginRight: 10,
+				height: 600,
+				events: {
+					load: function () {
+					}
+				}
+			},
+			exporting: {
+				enabled: false
+			},
+			credits: {
+				enabled: false
+			},
+			title: {
+				text: 'Timeline Chart'
+			},
+			xAxis: {
+				type: 'datetime',
+				tickPixelInterval: 100
+			},
+			yAxis: {
+				min: 0,
+				startOnTick: false,
+				title: {
+					text: 'occurrence',
+					style: {
+						color: '#04bfbf'
+					},
+					enabled: false
+				},
+				gridLineDashStyle: 'longdash'
+			},
+			tooltip: {
+				shared: true,
+				backgroundColor: 'rgba(255, 255, 255, 0.85)',
+				xDateFormat: '%H:%M:%S',
+				formatter: function () {
+					var s = '<b>' + Highcharts.dateFormat('%H:%M:%S', this.x) + '</b>';
+					$.each(this.points, function (i, point) {
+						s += '<br/><span style="color:' + point.series.color + '">' + point.series.name + ': </span> ' + point.y.toLocaleString();
+					});
+					return s;
+				}
+			},
+			legend: {
+				backgroundColor: '#ffffff',
+				layout: 'horizontal',
+				itemDistance: 30,
+				floating: true,
+				align: 'right',
+				verticalAlign: 'top',
+				x: -100,
+				y: 12,
+				shadow: true,
+				labelFormatter: function () {
+					return this.name;
+				}
+			},
+			series: [
+				{
+					name: '<%= __('Log Size') %>',
+					type: 'area',
+					color: '#46b8da',
+					marker: {
+						fillColor: '#ffffff',
+						lineWidth: 1,
+						lineColor: null
+					},
+					data: [{"x":new Date().getTime(),"y":0}]
+				},
+				{
+					name: '<%= __('Offset') %>',
+					type: 'line',
+					color: '#eea236',
+					marker: {
+						fillColor: '#ffffff',
+						lineWidth: 1,
+						lineColor: null
+					},
+					data: [{"x":new Date().getTime(),"y":0}]
+				},
+				{
+					name: '<%= __('Lag') %>',
+					type: 'line',
+					color: '#c9302c',
+					marker: {
+						fillColor: '#ffffff',
+						lineWidth: 1,
+						lineColor: null
+					},
+					data: [{"x":new Date().getTime(),"y":0}]
+				}
+			],
+			plotOptions: {
+				series: {
+					animation: true
+				}
+			}
+		}),
+		initCondition: function() {
+			var now = new Date().getTime();
+			_Chart.chart.series[0].setData([{"x":now,"y":0}]);
+			_Chart.chart.series[1].setData([{"x":now,"y":0}]);
+			_Chart.chart.series[2].setData([{"x":now,"y":0}]);
+		},
+		addChartData: function(data) {
+			var logSize = { "x": data.xAxis, "y": data.yAxis.logSize };
+			var offset = { "x": data.xAxis, "y": data.yAxis.offset };
+			var lag = { "x": data.xAxis, "y": data.yAxis.lag };
+
+			$('#time-badge').text(moment(logSize.x).format('HH:mm:ss'));
+			$('#logsize-badge').text(logSize.y.toLocaleString());
+			$('#offset-badge').text(offset.y.toLocaleString());
+			$('#lag-badge').text(lag.y.toLocaleString());
+
+			var timer = new Date();
+			timer.setHours(0);
+			timer.setMinutes(0);
+			timer.setSeconds(0);
+			timer.setMilliseconds(data.yAxis.proc_time);
+			$('#proc-time-badge').text(moment(timer).format('HH:mm:ss'));
+			$('#proc-logsize-badge').text(data.yAxis.inc_logSize.toLocaleString());
+			$('#proc-offset-badge').text(data.yAxis.inc_offset.toLocaleString());
+
+			if(_Chart.isFirst) {
+				_Chart.chart.series[0].data[0].update(logSize, false);
+				_Chart.chart.series[1].data[0].update(offset, false);
+				_Chart.chart.series[2].data[0].update(lag, false);
+				_Chart.isFirst = false;
+			} else {
+				var shift = (getTickCount(_Chart.chart) > _Chart.chartMax);
+				_Chart.chart.series[0].addPoint(logSize, false, shift);
+				_Chart.chart.series[1].addPoint(offset, false, shift);
+				_Chart.chart.series[2].addPoint(lag, false, shift);
+			}
+			_Chart.chart.redraw();
+		}
+	};
+
+	function getTickCount(chart) {
+		var max = 0;
+		for(var i = 0; i < chart.series.length; i++) {
+			var dlen = chart.series[i].data.length;
+			if(max < dlen) max = dlen;
+		}
+		return max;
+	}
+
+	$(function() {
+		var topic = '<%= topic %>';
+		var consumer = '<%= consumer %>';
+		var interval = parseInt('<%= interval %>', 10);
+		$('#interval').val(interval);
+
+		var socket = io.connect('<%= socketServer %>');
+		socket.on('connected', function(data) {
+			var resData = JSON.stringify(data)
+			_Chart.connected = true;
+			_Chart.isOn = true;
+			_Chart.isFirst = true;
+			_Chart.initCondition();
+			socket.emit('kafkachart', {
+				topic: topic,
+				consumer: consumer,
+				interval: interval
+			});
+
+			$('#interval').on('change', function(e) {
+				socket.emit('kafkachart', {
+					topic: topic,
+					consumer: consumer,
+					interval: $('#interval').val()
+				});
+			});
+		});
+
+		socket.on('kafkachart', function(data) {
+			_Chart.addChartData(data);
+		});
+	});
+
+</script>
+</body>
+</html>

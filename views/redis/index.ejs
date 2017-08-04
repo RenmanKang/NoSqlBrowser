@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title><%= title %></title>
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<link rel="shortcut icon" href="/favicon.ico">
+	<link rel='stylesheet' href='/lib/bootstrap-3.3.4/css/bootstrap.min.css' />
+	<link rel="stylesheet" href="/lib/bootstrap-toggle/css/bootstrap-toggle.min.css" />
+	<link rel="stylesheet" href="/lib/bootstrap-select/css/bootstrap-select.min.css" />
+	<link rel="stylesheet" href="/css/redis-default.css"/>
+	<style type="text/css">
+		body {
+			padding-top: 60px;
+			padding-bottom: 40px;
+		}
+	</style>
+</head>
+<body>
+<% include ../common/gnb %>
+<div class="container">
+	<div id="app-container">
+		<div>
+			<div id="sideBar">
+				<div id="keyTreeActions">
+					<button class="btn btn-success btn-mini" onclick="refreshTree()"><span class="glyphicon glyphicon-refresh"></span> Refresh</button>
+					<button class="btn btn-info btn-mini" data-toggle="modal" id="redisCommandsCmd" href="#"><span class="glyphicon glyphicon-info-sign"></span> Commands</button>
+					<div class="btn-group">
+						<a class="btn btn-info btn-mini dropdown-toggle" data-toggle="dropdown" href="#">
+							<span class="glyphicon glyphicon-wrench"></span>
+							More...
+							<span class="caret"></span>
+						</a>
+						<ul class="dropdown-menu">
+							<li><a data-toggle="modal" id="redisImportData" href="#"><span class="glyphicon glyphicon-import"></span> <%= __('Import') %></a></li>
+							<li><a data-toggle="modal" id="redisExportData" href="#"><span class="glyphicon glyphicon-export"></span> <%= __('Export') %></a></li>
+							<li><a data-toggle="modal" id="addServerCmd" href="#"><span class="glyphicon glyphicon-plus-sign"></span> <%= __('Add Server') %></a></li>
+						</ul>
+					</div>
+				</div>
+				<div id="keyTree"></div>
+				<div id="sidebarResize"></div>
+			</div>
+			<div id="body"></div>
+		</div>
+	</div>
+	<div id="commandLineContainer">
+		<div id="commandLineBorder" style="border-top: 1px solid #ddd;padding-bottom: 5px;"></div>
+		<div class="btn-group" data-toggle="buttons">
+			<% var connections = getConnections(); %>
+			<% connections.forEach(function(connection, index) {%>
+			<% if (index == 0) { %>
+			<label class="btn btn-primary active"
+				   onclick="setConnection('<%=connection.connection_options.host%>:<%=connection.connection_options.port%>:<%=connection.selected_db%>');">
+				<input type="radio" id="firstConnection" value="<%=connection.connection_options.host%>:<%=connection.connection_options.port%>:<%=connection.selected_db%>"/>
+				<%=connection.connection_options.host%>:<%=connection.connection_options.port%>:<%=connection.selected_db%>
+			</label>
+			<% } else { %>
+			<label class="btn btn-primary"
+				   onclick="setConnection('<%=connection.connection_options.host%>:<%=connection.connection_options.port%>:<%=connection.selected_db%>');">
+				<input type="radio">
+					<%=connection.connection_options.host + ':' + connection.connection_options.port + ':' + connection.selected_db%>
+			</label>
+			<% }}); %>
+		</div>
+		<div style="border-top: 1px solid #ddd;padding-bottom: 5px;"></div>
+		<i id="lockCommandButton" class="icon-lock disabled"></i>
+
+		<div id="commandLineOutput"></div>
+		<label id="selectedConnectionLabel">Current Server:</label>
+		<input id="selectedConnection" type="hidden">
+
+		<div id="commandLine"></div>
+	</div>
+</div>
+<% include ./modals/addListValueModal %>
+<% include ./modals/editZSetRowModal %>
+<% include ./modals/editListRowModal %>
+<% include ./modals/addKeyModal %>
+<% include ./modals/editHashRowModal %>
+<div class="modal fade" id="redisCommandsModal" tabindex="-1" role="dialog" aria-labelledby="redisCommandsModalLabel" aria-hidden="true">
+	<div class="modal-dialog">
+		<div class="modal-content">
+			<div class="modal-header">
+				<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+				<h4 class="modal-title" id="redisCommandsModalLabel"><a id="redisCommandsExternal" target="_blank" href="http://redis.io/commands"><%= __('Redis Commands') %></a></h4>
+			</div>
+			<div class="modal-body">
+				<iframe seamless="seamless" src="http://redis.io/commands">test</iframe>
+			</div>
+			<div class="modal-footer">
+				<button type="button" class="btn btn-default" data-dismiss="modal"><%= __('Close') %></button>
+			</div>
+		</div>
+	</div>
+</div>
+
+<div class="modal fade" id="addServerModal" tabindex="-1" role="dialog" aria-labelledby="addServerDataModalLabel" aria-hidden="true">
+	<div class="modal-dialog">
+		<div class="modal-content">
+			<div class="modal-header">
+				<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+				<h4 class="modal-title" id="addServerDataModalLabel"><%= __('Add Server') %></h4>
+			</div>
+			<div class="modal-body">
+				<div class="container" id="addServerContainer">
+					<form id="addServerForm">
+						<div class="form-group" style="margin-top:4px;">
+							<label><%= __('Hostname') %></label>
+							<input type="text" class="form-control" name="hostname" value="<%= host %>" id="host" placeholder="Hostname">
+						</div>
+						<div class="form-group" style="margin-top:12px;">
+							<label><%= __('Port or Unix Socket Path') %></label>
+							<input type="text" class="form-control" name="port" value="<%= port %>" id="port" placeholder="Port">
+						</div>
+						<div class="form-group" style="margin-top:12px;">
+							<label><%= __('Password') %></label>
+							<input type="password" class="form-control" name="password" id="password" placeholder="Password">
+						</div>
+						<div class="form-group" style="margin-top:12px;">
+							<div>
+								<label><%= __('Database Index') %></label>
+							</div>
+							<select class="selectpicker" id="dbIndex" name="dbIndex" data-style="btn-default">
+								<option value="0" selected="selected">0</option>
+								<option value="1">1</option>
+								<option value="2">2</option>
+								<option value="3">3</option>
+								<option value="4">4</option>
+								<option value="5">5</option>
+								<option value="6">6</option>
+								<option value="7">7</option>
+								<option value="8">8</option>
+								<option value="9">9</option>
+								<option value="10">10</option>
+								<option value="11">11</option>
+								<option value="12">12</option>
+								<option value="13">13</option>
+								<option value="14">14</option>
+								<option value="15">15</option>
+							</select>
+						</div>
+					</form>
+				</div>
+			</div>
+			<div class="modal-footer">
+				<button type="button" class="btn btn-default" data-dismiss="modal"><%= __('Cancel') %></button>
+				<button type="button" class="btn btn-primary" id="addServer-btn"><%= __('Add') %></button>
+			</div>
+		</div>
+	</div>
+</div>
+
+<div class="modal fade" id="importDataModal" tabindex="-1" role="dialog" aria-labelledby="importDataModalLabel" aria-hidden="true">
+	<div class="modal-dialog">
+		<div class="modal-content">
+			<div class="modal-header">
+				<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+				<h4 class="modal-title" id="importDataModalLabel">Import</h4>
+			</div>
+			<div class="modal-body">
+				<% include ./tools/importData %>
+			</div>
+			<div class="modal-footer">
+				<button type="button" class="btn btn-default" data-dismiss="modal"><%= __('Cancel') %></button>
+				<button type="button" class="btn btn-primary" id="import-btn"><%= __('Import') %></button>
+			</div>
+		</div>
+	</div>
+</div>
+
+<div class="modal fade" id="exportDataModal" tabindex="-1" role="dialog" aria-labelledby="exportDataModalLabel" aria-hidden="true">
+	<div class="modal-dialog">
+		<div class="modal-content">
+			<div class="modal-header">
+				<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+				<h4 class="modal-title" id="exportDataModalLabel">Export</h4>
+			</div>
+			<div class="modal-body">
+				<% include ./tools/exportData %>
+			</div>
+			<div class="modal-footer">
+				<button type="button" class="btn btn-default" data-dismiss="modal"><%= __('Cancel') %></button>
+				<button type="button" class="btn btn-primary" id="export-btn"><%= __('Export') %></button>
+			</div>
+		</div>
+	</div>
+</div>
+
+<% include ../common/modals %>
+<% include ../common/script %>
+<script type="text/javascript" src="/lib/bootstrap-select/js/bootstrap-select.min.js"></script>
+<script type="text/javascript" src="/lib/bootstrap-toggle/js/bootstrap-toggle.min.js"></script>
+<script type="text/javascript" src="/redis/jstree/jquery.jstree.js"></script>
+<script type="text/javascript" src="/redis/jquery.form.js"></script>
+<script type="text/javascript" src="/redis/jquery.resize.min.js"></script>
+<script type="text/javascript" src="/redis/clippy-jquery/jquery.clippy.js"></script>
+<script type="text/javascript" src="/redis/ejs.js"></script>
+<script type="text/javascript" src="/redis/dateformat.js"></script>
+<script type="text/javascript" src="/redis/countdown.js"></script>
+<script type="text/javascript" src="/js/redis-tools.js"></script>
+<script type="text/javascript">
+	$(function() {
+		$('#redisCommandsCmd').on('click', function() {
+			$('#redisCommandsModal').modal('show');
+		});
+		$('#addServerCmd').on('click', function() {
+			$('#addServerModal').modal('show');
+		});
+		$('#addServer-btn').on('click', function() {
+			$.ajax({
+				type: 'post',
+				url: '/redis/login',
+				dataType: 'json',
+				data: $('#addServerForm').serialize(),
+				success: function(result) {
+					$('#addServerModal').modal('hide');
+					if(result.status === 200) {
+						location.reload(true);
+					} else {
+						$('#alertModalBody').html('<p>'+result.message+'</p>');
+					}
+					$('#alertModel').modal('show');
+				},
+				error: function(err) {
+					console.log(err);
+					$('#addServerModal').modal('hide');
+					$('#alertModalBody').html('<p>'+err.message+'</p>');
+					$('#alertModel').modal('show');
+				}
+			});
+		});
+
+		// Import redis data
+		$('#redisImportData').on('click', function() {
+			$('#importDataModal').modal('show');
+		});
+		$('#import-btn').on('click', function() {
+			$.ajax({
+				type: 'post',
+				url: '/redis/tools/import',
+				data: $(this).serialize(),
+				dataType: 'json',
+				success: function (res) {
+					$('#importDataModal').modal('hide');
+					var msg = (res.status === 200) ?
+						'<div>Inserted: ' + res.inserted + '</div><div><span class="label label-success">Success</span></div>' :
+						'<div>Errors: ' + res.errors + '</div><div><span class="label label-important">Errors</span></div>';
+					$('#alertModalBody').html(msg);
+					$('#alertModel').modal('show');
+				},
+				error: function(res) {
+					$('#importDataModal').modal('hide');
+					$('#alertModalBody').html(
+						'<div>Errors: ' + res.errors + '</div><div><span class="label label-important">Errors</span></div>'
+					);
+					$('#alertModel').modal('show');
+				}
+			});
+		});
+
+		// Export redis data.
+		$('#redisExportData').on('click', function() {
+			$('#exportDataModal').modal('show');
+		});
+		$('#export-btn').on('click', function() {
+			window.open("/redis/tools/export?" + $('#redisExportForm').serialize(), '_blank');
+		});
+
+	});
+</script>
+<script type="text/javascript">
+	var setConnection = function (connectionId) {
+		$('#selectedConnectionLabel').text("Current Instance: " + connectionId);
+		$('#selectedConnection').val(connectionId);
+	};
+	$(function () {
+		$('#selectedConnectionLabel').text("Current Instance: " + $('#firstConnection').val());
+		$('#selectedConnection').val($('#firstConnection').val());
+		loadTree();
+		loadConfig(function () {
+			loadCommandLine();
+			setupResizeEvents();
+			setupCommandLock();
+			setupCLIKeyEvents();
+			$('.container').removeClass('container');
+			$('html').css('overflow-y', 'hidden');
+			$('#pageIndex').on('keydown', function (e) {
+				if (e.keyCode == 13) {
+					$('#gotoIndexButton').click();
+				}
+			});
+			$('#redisCommandsModal').modal({
+				backdrop: false,
+				keyboard: false,
+				show: false
+			});
+		});
+	});
+</script>
+
+</body>
+</html>

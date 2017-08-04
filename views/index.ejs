@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title><%= title %></title>
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<link rel="shortcut icon" href="/favicon.ico">
+	<link rel="stylesheet" href="/lib/bootstrap-3.3.4/css/bootstrap.min.css" />
+	<link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+<% include ./common/gnb %>
+<div class="container">
+	<div class="starter-template">
+		<h3>Welcom to <%= title %></h3>
+		<p><%= message %></p>
+		<div>
+			<ul>
+				<li><%= __('view count') %>: <%= count %></li>
+				<li><%= __('expires in') %>: <%= expire %></li>
+			</ul>
+		</div>
+	</div>
+</div>
+<% include ./common/script %>
+</body>
+</html>

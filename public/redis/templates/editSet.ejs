@@ -1,0 +1,17 @@
+<div id="itemActionsBar">
+	<button class="btn btn-danger btn-sm" onclick="deleteKey('<%= connectionId %>','<%= key %>')">Delete Key</button>
+</div>
+<div id="itemData">
+	<table class="table">
+		<thead>
+		<th>Value</th>
+		</thead>
+		<tbody>
+		<% members.forEach(function(member) { %>
+		<tr>
+			<td><%= member %></td>
+		</tr>
+		<% }) %>
+		</tbody>
+	</table>
+</div>

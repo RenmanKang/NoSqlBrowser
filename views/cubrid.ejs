@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title><%= title %></title>
+	<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+	<link rel="shortcut icon" href="/favicon.ico" />
+	<link rel="stylesheet" href="/lib/bootstrap-3.3.4/css/bootstrap.min.css" />
+	<link rel="stylesheet" href="/lib/bootstrap-table/bootstrap-table.min.css" />
+	<link rel="stylesheet" href="/lib/bootstrap-select/css/bootstrap-select.min.css" />
+	<link rel="stylesheet" href="/lib/jstree/themes/proton/style.min.css" />
+	<link rel="stylesheet" href="/css/style.css" />
+	<style>
+		.tree ul { margin-left: 6px; }
+		#tree { position:fixed; top:56px; left:5px; width:300px; border-right:1px solid #ddd; z-index:1; }
+		#tbTree { height:580px; overflow:scroll; }
+		#sidebarResize {
+			background-color: transparent; border: 10px solid transparent; cursor: col-resize;
+			height: 100%; position: absolute; right: -11px; top: 0; width: 1px;
+		}
+		#content { position: fixed; left: 304px; margin: 4px; min-width: 600px; width: 100%; height: 600px; }
+		#sql-res-div { overflow: scroll; border: 1px solid #eee; margin-top: 2px; background-color:#fefefe; }
+		#query-hist { background-color: #efefef; border: 1px solid #eee; height: 30px; margin: 4px 0 2px; padding: 5px; }
+		#query-hist a { text-decoration: none; }
+		#query-list { margin:2px 0; width:100%; height: auto; max-height:300px; overflow-x: hidden; }
+		#query-list li { padding: 0 4px; }
+		.query-item { margin-bottom: 2px; padding: 2px; }
+	</style>
+</head>
+<body>
+<% include ./common/gnb %>
+<div>
+	<div class="affix-top tree" id="tree" style="background-color:#fff;">
+		<div style="margin-bottom:4px;"><h4 style="margin:2px 0;"><%= cubrid %></h4></div>
+		<div style="margin:4px 0;">
+			<div class="input-group input-group-sm" style="margin:0 3px 0 0;">
+				<input type="text" class="form-control" id="srch-tname"/>
+				<span class="input-group-btn">
+					<button type="button" class="btn btn-info" id="search-btn" title="<%= __('Search') %>">
+						<i class="glyphicon glyphicon-search"></i>
+					</button>
+				</span>
+				<span class="input-group-btn">
+					<button type="button" class="btn btn-info" id="refresh-btn" title="<%= __('Refresh') %>">
+						<i class="glyphicon glyphicon-refresh"></i>
+					</button>
+				</span>
+			</div>
+		</div>
+		<div id="tbTree"></div>
+		<div id="sidebarResize"></div>
+	</div>
+	<div id="content" class= "content sec-index">
+		<div id="sql-txt-div">
+			<div>
+				<textarea class="form-control" id="query" name="data" rows="15" style="height:300px;"></textarea>
+				<div class="dropdown" id="query-hist" style="">
+					<a class="dropdown-toggle" role="button" data-toggle="dropdown" data-target="#">
+						<b class="caret"></b>
+						<%= __('Select Query History') %>
+					</a>
+					<ul id="query-list" class="dropdown-menu scrollable-menu" role="menu"></ul>
+				</div>
+			</div>
+			<div class="btn-group" id="cmd-btn-group" style="margin:2px 0;">
+				<button type="button" class="btn btn-primary btn-sm" id="query-btn">
+					<i class="glyphicon glyphicon-send"></i> <%= __('Execute Query') %>
+				</button>
+				<button type="button" class="btn btn-warning btn-sm" id="clear-btn">
+					<i class="glyphicon glyphicon-edit"></i> <%= __('Clear Query') %>
+				</button>
+				<button type="button" class="btn btn-danger btn-sm" id="clear-res">
+					<i class="glyphicon glyphicon-erase"></i> <%= __('Clear Result') %>
+				</button>
+			</div>
+		</div>
+		<div id="sql-res-div">
+			<table class="table table-bordered">
+				<thead id="sql-res-hd">
+				</thead>
+				<tbody id="sql-res-bd">
+				</tbody>
+			</table>
+		</div>
+	</div>
+</div>
+<div class="modal fade" id="infoModal" tabindex="-1" role="dialog" aria-labelledby="infoModalLabel" aria-hidden="true">
+	<div class="modal-dialog">
+		<div class="modal-content">
+			<div class="modal-header">
+				<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+				<h4 class="modal-title" id="infoModalLabel"></h4>
+			</div>
+			<div class="modal-body" id="modal-body">
+			</div>
+			<div class="modal-footer">
+				<button type="button" class="btn btn-default" data-dismiss="modal"><%= __('Close') %></button>
+			</div>
+		</div>
+	</div>
+</div>
+<% include ./common/modals %>
+<% include ./common/script %>
+<script type="text/javascript" src="/lib/bootstrap-select/js/bootstrap-select.min.js"></script>
+<script type="text/javascript" src="/lib/jstree/jstree.min.js"></script>
+<!-- for Left Tree Pannel -->
+<script type="text/javascript">
+	function loadTree(tname) {
+		if(!tname) tname='';
+		$('#tbTree').jstree({
+			core : {
+				data : {
+					url : '/api/cubrid/tree?srch='+tname,
+					dataType : 'json',
+					data : function (node) {
+						return { path : node.id };
+					}
+				},
+				multiple : false,
+				themes : {
+					name: 'proton',
+					responsive: true
+				}
+			},
+			plugins : [ 'search' ]
+		});
+		$('#tbTree').bind('changed.jstree', function (e, data) {
+			loadPathInfo(data.selected);
+		}).bind('loaded.jstree', function(e, data) {
+			$('#srch-tname').on('keyup', searchNode);
+			$('#search-btn').on('click', searchNode);
+			resizeApp();
+		});
+	}
+
+	function reloadTree() {
+		$('#tbTree').jstree('destroy').empty();
+		loadTree();
+	}
+
+	function loadPathInfo(tname) {
+		if(tname && Array.isArray(tname)) tname = tname[0];
+		$.get('/api/cubrid/get?tnames='+tname, function(result) {
+			if(result.status === 200) {
+				$('#infoModalLabel').html(result.data.type + ' NAME :: ' + result.data.name);
+				$('#modal-body').empty();
+				if(result.data.type === 'COLUMN') {
+					var tb = $('<table class="table table-bordered" style="margin-top:10px;">');
+					tb.append('<tr><td>Name</td><td>'+result.data.name+'</td></tr>');
+					tb.append('<tr><td>Type</td><td>'+result.data.ctype+'</td></tr>');
+					tb.append('<tr><td>Null</td><td>'+result.data.is_null+'</td></tr>');
+					tb.append('<tr><td>Key</td><td>'+result.data.key+'</td></tr>');
+					tb.append('<tr><td>Default</td><td>'+result.data.default+'</td></tr>');
+					tb.append('<tr><td>Extra</td><td>'+result.data.extra+'</td></tr>');
+					$('#modal-body').append(tb);
+				} else if(result.data.type === 'TABLE') {
+					var sql = result.data.value.replace(/\] \(\[/g, '] (\n\t[').replace(/, \[/g, ',\n\t[').replace(/,  CONSTRAINT \[/g, ',\n\tCONSTRAINT [');
+					var off = sql.lastIndexOf(')');
+					if(off !== -1) sql = sql.substring(0, off) + '\n' + sql.substring(off);
+					$('#modal-body').append('<textarea class="form-control" id="info-text" name="data" rows="20" readonly="readonly"></textarea>');
+					$('#info-text').val(sql);
+				} else {
+					var sql = result.data.value.replace(/\] \(\[/g, '] (\n\t[').replace(/, \[/g, ',\n\t[').replace(/,  CONSTRAINT \[/g, ',\n\tCONSTRAINT [');
+					var off = sql.lastIndexOf(')');
+					if(off !== -1) sql = sql.substring(0, off) + '\n' + sql.substring(off);
+					sql = 'CREATE VIEW ' + tname + ' AS \n' + sql;
+					$('#modal-body').append('<textarea class="form-control" id="info-text" name="data" rows="20" readonly="readonly"></textarea>');
+					$('#info-text').val(sql);
+				}
+				$('#infoModal').modal('show');
+			} else {
+				$('#alertModalBody').html('<p>'+result.message+'</p>');
+				$('#alertModel').modal('show');
+			}
+		});
+	}
+
+	function resizeApp() {
+		var barWidth = $('#tbTree').outerWidth(true);
+		$('#content').css('left', barWidth);
+		$('#content').width($(window).width() - (barWidth+4));
+
+		$('#tbTree').height($(window).height() - $('#tbTree').offset().top);
+		$('#sidebarResize').css('height', $('#tree').css('height'));
+		var contentHeight = $(window).height() - $('#content').offset().top;
+		$('#query').height(contentHeight/2 - ($('#query-hist').outerHeight()+$('#cmd-btn-group').outerHeight()));
+		$('#sql-res-div').height(contentHeight - ($('#sql-txt-div').outerHeight(true)+3));
+	}
+
+	function setupResizeEvents() {
+		var sidebarResizing = false;
+		var sidebarFrame = $("#tree").width();
+
+		$('#tbTree').bind('resize', resizeApp);
+		$(window).bind('resize', resizeApp);
+
+		$(document).mouseup(function (event) {
+			sidebarResizing = false;
+			sidebarFrame = $("#tree").width();
+			$('body').removeClass('select-disabled');
+		});
+
+		$("#sidebarResize").mousedown(function (event) {
+			sidebarResizing = event.pageX;
+			$('body').addClass('select-disabled');
+		});
+
+		$(document).mousemove(function (event) {
+			if(sidebarResizing) {
+				var w = sidebarFrame - (sidebarResizing - event.pageX);
+				if(w > 240) {
+					$('#tree').width(w);
+					resizeApp();
+				}
+			}
+		});
+	}
+
+	var to = false;
+	function searchNode() {
+		var val = $('#srch-tname').val();
+		if(!JSComm.isEmpty(val)) {
+			if(to) { clearTimeout(to); }
+			to = setTimeout(function () {
+				$('#tbTree').jstree(true).search(val);
+			}, 250);
+		}
+	}
+
+	function loadQueryHistory() {
+		$.get('/api/cubrid/query/history', function(result) {
+			if(result.status === 200) {
+				var data = result.data;
+				$('#query-list').empty();
+				if(data && data.length) {
+					for(var i = 0; i < data.length; i++) {
+						$('#query-list').append('<li><div class="alert alert-info query-item">'
+								+ '<a href="#" class="close" data-index="'+i+'" data-dismiss="alert" style="font-size:18px;margin-right:3px;">&times;</a>'
+								+ '<a href="#" class="ex-query-link" style="margin-left:4px;">' + data[i] + '</a></div></li>'
+						);
+					}
+					resetHistoryEvent();
+				} else {
+					$('#query-list').parent().hide();
+				}
+			} else {
+				console.log('loadQueryHistory error;', result.message);
+			}
+		});
+	}
+
+	function addQueryHistory() {
+		var flag = false;
+		var query = $('#query').val();//.replace(/\n/g, ' ').replace(/\t/g, ' ');
+		$('.ex-query-link').each(function() {
+			if($(this).text() === query) {
+				flag = true;
+				return;
+			}
+		});
+
+		if(!flag) {
+			$.post('/api/cubrid/query/history', {query: query}, function(result) {
+				if(result.status === 200) {
+					$('#query-list .close').each(function(idx) {
+						$(this).attr('data-index', idx+1);
+					});
+					$('#query-list').prepend('<li><div class="alert alert-info query-item">'
+							+ '<a href="#" class="close" data-index="0" data-dismiss="alert" style="font-size:18px;margin-right:3px;">&times;</a>'
+							+ '<a href="#" class="ex-query-link" style="margin-left:4px;">' + query + '</a></div></li>'
+					);
+					resetHistoryEvent();
+				} else {
+					console.log('addQueryHistory error;', result.message);
+				}
+			});
+		}
+	}
+
+	function resetHistoryEvent() {
+		if($('.ex-query-link').length > 0) {
+			$('.query-item').alert();
+			$('.ex-query-link').on('click', function(e) {
+				e.preventDefault();
+				var q = $(this).text();
+				$('#query').val(q);
+			});
+			$('#query-list .close').on('click', function(e) {
+				var index = $(this).attr('data-index');
+				$.ajax({
+					type: 'DELETE',
+					url: '/api/cubrid/query/history/'+index,
+					contentType: 'application/json',
+					success: function(result) {
+						resetHistoryEvent();
+					},
+					error: function(result) {
+						console.log(result);
+					}
+				});
+			});
+			$('#query-list').dropdown();
+			$('#query-list').parent().show();
+		} else {
+			$('#query-list').parent().hide();
+		}
+		resizeApp();
+	}
+
+	$(function () {
+		loadTree();
+		loadQueryHistory();
+		setupResizeEvents();
+		$('#refresh-btn').on('click', reloadTree);
+		$('#query-btn').on('click', function() {
+			var q = $('#query').val();
+			if(!JSComm.isEmpty(q)) {
+				$('#sql-res-hd').empty();
+				$('#sql-res-bd').empty();
+
+				$.post('/api/cubrid/query', { sql : q }, function(result) {
+					if(result.status === 200) {
+						var data = result.data;
+						if(data && data.ColumnNames) {
+							var th = $('<tr>');
+							for(var i = 0; i < data.ColumnNames.length; i++) {
+								th.append('<th>'+data.ColumnNames[i]+'</th>');
+							}
+							$('#sql-res-hd').append(th);
+
+							for(var i = 0; i < data.ColumnValues.length; i++) {
+								var td = $('<tr>');
+								var vals = data.ColumnValues[i];
+								for(var j = 0; j < vals.length; j++) {
+									td.append('<td>'+vals[j]+'</td>');
+								}
+								$('#sql-res-bd').append(td);
+							}
+						} else {
+							$('#sql-res-hd').append('<tr><th>Success!!</th></tr>');
+						}
+						addQueryHistory();
+					} else {
+						console.log(result.message);
+						$('#sql-res-hd').append('<tr><th>ERROR: '+result.status+'</th></tr>');
+						var err_msg = result.message;
+						$('#sql-res-bd').append('<tr><td><pre>'+err_msg+'</pre></td></tr>');
+					}
+					$('#sql-res-title').show();
+				})
+			}
+		});
+
+		$('#clear-btn').on('click', function() {
+			$('#query').val('');
+			$('#query').focus();
+		});
+		$('#clear-res').on('click', function() {
+			$('#sql-res-hd').empty();
+			$('#sql-res-bd').empty();
+		});
+	});
+</script>
+</body>
+</html>
